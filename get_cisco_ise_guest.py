@@ -209,6 +209,59 @@ def guest_to_csv(guest_list, csv_out_file):
         print("I/O error")
 
 
+def check_sponsort_portal(portal_id, which_ise="legacy", debug=False):
+    """Check if portal ID exist on ISE
+
+    Args:
+        portal_id (str): Portal identifier to check
+        which_ise (str, optional): Defines on which ISE this function will apply ('new' or 'legacy"). Defaults to "legacy".
+        debug (bool, optional): Debug mode to collect execution time information. Defaults to False.
+
+    Returns:
+        portal_exist (bool): True if portal exist
+    """
+    # Initiate vars
+    portal_exist = False
+
+    # Debug mode (if selected)
+    if debug:
+        start_time_root = time()
+        print("[DEBUG] Starting portal collection on remote ISE")
+
+    while True:
+        # Build items required for API request
+        
+        if which_ise.lower() == "legacy":
+            headers = {'Accept': 'application/vnd.com.cisco.ise.identity.portal.2.0+xml'}
+            api_url = f"{credentials.LEGACY_ISE_URL}/ers/config/sponsorportal/{portal_id}"
+            try:
+                ise_response = requests.get(api_url, auth=(credentials.LEGACY_ISE_LOGIN, credentials.LEGACY_ISE_PASSWORD), verify=False, headers=headers, timeout=(5, 30))
+            except requests.ConnectTimeout as err:
+                print(f"[ERROR] Cannot connect to {which_ise} with provided IP address : TIMEOUT")
+                break
+        elif which_ise.lower() == "new":
+            headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+            api_url = f"{credentials.NEW_ISE_URL}/ers/config/sponsorportal/{portal_id}"
+            try:
+                ise_response = requests.get(api_url, auth=(credentials.NEW_ISE_LOGIN, credentials.NEW_ISE_PASSWORD), verify=False, headers=headers, timeout=(5, 30))
+            except requests.ConnectTimeout as err:
+                print(f"[ERROR] Cannot connect to {which_ise} with provided IP address : TIMEOUT")
+                break
+        else:
+            print("[ERROR] ISE type must be either 'legacy' OR 'new'")
+            break
+
+        # Manage ISE KO response
+        if not ise_response.ok:
+            print(f"[WARNING] {which_ise} ISE returned status code {ise_response.status_code} during consultation of portal ID #{guest_id}")
+            break
+        else:
+            portal_exist = True
+            break
+
+    return portal_exist
+
+
 def create_guest_user(guest_user_details, which_ise="new", debug=False):
     """Create a guest user on Cisco ISE using API
 
@@ -302,7 +355,7 @@ def main():
     if not guest_id_collected:
         guest_id_collected, guest_id_list, guest_count = get_cisco_ise_guests(max_page=guest_pages, debug=debug_mode)
 
-    # Step 3 : Collect guest informations on legacy ISE and 
+    # Step 3 : Collect guest informations on legacy ISE and sponsort user list
     for guest_id in tqdm(guest_id_list):
         guest_details, sponsort_username = get_guest_details(guest_id, debug=debug_mode) # Collect Guest details on legacy ISE
         if sponsort_username not in sponsort_user_list:  # Collect sponsort for later use
@@ -312,8 +365,11 @@ def main():
     # Step 4 : Write all guest information inside CSV file
     guest_to_csv(guest_user_list, csv_out)
 
-    # Step 5 : Check if sponsort usernames exists on new ISE
-    #TODO : Implement function to check if sponsort_users are created
+    # Step 5 : Check if sponsort usernames and portal id exists on new ISE
+    portal_ok = check_sponsort_portal(credentials.NEW_ISE_PORTAL_ID, which_ise="new")
+    if not portal_ok:
+        exit(0)
+    # TODO : Implement function to check if sponsort_users are created
 
     # Step 6 : Inject guest users inside new ISE
     for guest_details in guest_user_list:
