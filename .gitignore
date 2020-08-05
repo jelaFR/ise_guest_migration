@@ -1,6 +1,6 @@
-__*
+__pycache__*
 .venv
 .vscode
 .gitignore
 *.csv
-credentials.py
+/credentials.py
