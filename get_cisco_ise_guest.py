@@ -271,6 +271,7 @@ def create_guest_user(guest_user_details, which_ise="new", debug=False):
             break
         else:
             guest_created = True  # Success of guest creation
+            break
 
     return guest_created
 
